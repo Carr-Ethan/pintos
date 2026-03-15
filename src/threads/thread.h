@@ -88,10 +88,14 @@ struct thread
     char name[16];                      /**< Name (for debugging purposes). */
     uint8_t *stack;                     /**< Saved stack pointer. */
     int priority;                       /**< Priority. */
+    int original_priority;
     struct list_elem allelem;           /**< List element for all threads list. */
-
+    struct list donor_list;
+    struct lock *waiting_lock;
+    int64_t wake_up_tick;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
+    struct list_elem donation_elem;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -116,6 +120,16 @@ void thread_print_stats (void);
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
+bool thread_tick_less (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+
+/**Prototype for thread_comparison
+ */
+list_less_func thread_wakeup_compare;
+list_less_func thread_priority_compare;
+list_less_func donation_priority_compare;
+
+void thread_clock_out(int64_t ticks);
 void thread_block (void);
 void thread_unblock (struct thread *);
 

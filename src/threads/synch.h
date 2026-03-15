@@ -36,6 +36,8 @@ struct condition
     struct list waiters;        /**< List of waiting threads. */
   };
 
+list_less_func cond_priority_compare;
+
 void cond_init (struct condition *);
 void cond_wait (struct condition *, struct lock *);
 void cond_signal (struct condition *, struct lock *);
