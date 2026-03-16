@@ -390,15 +390,20 @@ bool donation_priority_compare(const struct list_elem* a, const struct list_elem
   return ta->priority > tb->priority;
 }
 
-/** Sets the current thread's priority to NEW_PRIORITY. */
+/** Sets the current thread's original priority to new_priority. If we are using base 
+ * priority as our effective priority we also set it to new priority. If we are no 
+ * longer the highest priority thread we preempt.*/
 void
 thread_set_priority (int new_priority) 
 {
   struct thread *t = thread_current();
+  //If we are using base priority as our effective priority, we set effective priority equal to new_priority
+
   if(t->priority == t->original_priority){
     t->priority = new_priority;
   }
   t->original_priority = new_priority;
+  //If we are no longer the highest priority, preempt
   if(!list_empty(&ready_list)){
     if(list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority){
       thread_yield();
@@ -406,14 +411,16 @@ thread_set_priority (int new_priority)
   }
 }
 
-/** Returns the current thread's priority. */
+/** Returns the current threads priority, in presence of priotiy donation, 
+ * return the max of the highest donor priority and original priority. */
 int
 thread_get_priority (void) 
 {
   struct thread *t = thread_current();
+
   int max_priority = t->original_priority;
+  
   if(!list_empty(&t->donor_list)){
-    list_sort(&t->donor_list, donation_priority_compare, NULL);
     if(max_priority <= list_entry(list_begin(&t->donor_list), struct thread, donation_elem)->priority){
       return list_entry(list_begin(&t->donor_list), struct thread, donation_elem)->priority;
     }

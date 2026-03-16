@@ -210,11 +210,9 @@ lock_acquire (struct lock *lock)
 
     struct thread *holder = lock->holder;
     int cur_priority = thread_get_priority();
-
-    for(int i = 0; i < 8; i++){
-      if(holder == NULL){
-        break;
-      }
+    
+    int i = 0;
+    while(i < 8 && holder != NULL){
       if(holder->priority < cur_priority){
         holder->priority = cur_priority;
       }
@@ -223,6 +221,7 @@ lock_acquire (struct lock *lock)
       } else {
         break;
       }
+      i++;
     }
   }
 
@@ -263,14 +262,16 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   struct thread *cur = thread_current();
-  struct list_elem *e = list_begin(&cur->donor_list);
 
-  while(e != list_end(&cur->donor_list)){
-    struct thread *t = list_entry(e, struct thread, donation_elem);
-    if(t->waiting_lock == lock){
-      e = list_remove(e);
-    } else {
-      e = list_next(e);
+  if(!list_empty(&cur->donor_list)){
+    struct list_elem *e = list_begin(&cur->donor_list);
+    while(e != list_end(&cur->donor_list)){
+      struct thread *t = list_entry(e, struct thread, donation_elem);
+      if(t->waiting_lock == lock){
+        e = list_remove(e);
+      } else {
+        e = list_next(e);
+      }
     }
   }
 
@@ -330,6 +331,7 @@ cond_init (struct condition *cond)
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
 
+/**Compares the priority of thread A to thread B, returns true if the priority of thread A is greater than thread B*/
 bool cond_priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
     struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
     struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
@@ -373,7 +375,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)){
+    enum intr_level old_level = intr_get_level();
+    intr_disable();
     list_sort(&cond->waiters, cond_priority_compare, NULL);
+    intr_set_level(old_level);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
   } 
