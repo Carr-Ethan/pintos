@@ -94,10 +94,10 @@ thread_init (void)
 {
   ASSERT (intr_get_level () == INTR_OFF);
 
-  // Added list_init for sleeping_list
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  // Added list_init for sleeping_list
   list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
@@ -145,7 +145,9 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-
+/**Check the head of the sleeping list, if it is past its wak up time, 
+ * we remove the threads from the sleeping list and unblock it. 
+ * If it has high priority them the current running thread we preempt*/
   while(!list_empty(&sleeping_list)){
     struct list_elem *e = list_begin(&sleeping_list);
     t = list_entry(e, struct thread, elem);
@@ -225,6 +227,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  /*Prempt so that it can be scheduled if the priority is higher*/
   thread_yield();
 
   return tid;
@@ -246,6 +249,7 @@ thread_block (void)
   schedule ();
 }
 
+/**Thread comparison function, returns true if the priority of thread A is greater than thread B */
 bool thread_priority_compare(const struct list_elem* a, const struct list_elem* b, void *aux UNUSED){
   struct thread *ta = list_entry(a, struct thread, elem);
   struct thread *tb = list_entry(b, struct thread, elem);
@@ -269,6 +273,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+  //Changed to ordered insert so maintain priority hierarchy
   list_insert_ordered (&ready_list, &t->elem, thread_priority_compare, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -328,6 +333,7 @@ thread_exit (void)
   NOT_REACHED ();
 }
 
+/**Wakeup comparison fuction. Returns true if the wake_up_tick of thread A is less than thread B */
 bool thread_wakeup_compare(const struct list_elem* a, const struct list_elem* b, void *aux UNUSED){
   struct thread *ta = list_entry(a, struct thread, elem);
   struct thread *tb = list_entry(b, struct thread, elem);
@@ -343,6 +349,7 @@ void thread_clock_out(int64_t wake_up_tick){
 
   old_level = intr_disable();
   cur->wake_up_tick = wake_up_tick;
+  //Updated to list_insert_ordered() to maintain priority hierarchy.
   list_insert_ordered(&sleeping_list, &cur->elem, thread_wakeup_compare, NULL);
   thread_block();
   intr_set_level(old_level);
@@ -359,6 +366,7 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
+  //Updated to list_insert_ordered() to maintain priority hierarchy.
   if (cur != idle_thread) 
     list_insert_ordered (&ready_list, &cur->elem, thread_priority_compare, NULL);
   cur->status = THREAD_READY;
@@ -383,32 +391,32 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-
+/**Returns true if the priority of thread A is greater than thread B, this function uses donation_elem for the donor list */
 bool donation_priority_compare(const struct list_elem* a, const struct list_elem* b, void *aux UNUSED){
   struct thread *ta = list_entry(a, struct thread, donation_elem);
   struct thread *tb = list_entry(b, struct thread, donation_elem);
   return ta->priority > tb->priority;
 }
 
-/** Sets the current thread's original priority to new_priority. If we are using base 
- * priority as our effective priority we also set it to new priority. If we are no 
+/** Sets the current thread's original priority to new_priority. We then set the effective priority to
+ * the max between the highest donated priority and original priority. If we are no 
  * longer the highest priority thread we preempt.*/
 void
 thread_set_priority (int new_priority) 
 {
+  enum intr_level old_level = intr_get_level();
   struct thread *t = thread_current();
   //If we are using base priority as our effective priority, we set effective priority equal to new_priority
 
-  if(t->priority == t->original_priority){
-    t->priority = new_priority;
-  }
   t->original_priority = new_priority;
+  t->priority = thread_get_priority();
   //If we are no longer the highest priority, preempt
   if(!list_empty(&ready_list)){
     if(list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority){
       thread_yield();
     }
   }
+  intr_set_level(old_level);
 }
 
 /** Returns the current threads priority, in presence of priotiy donation, 
@@ -416,6 +424,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
+  enum intr_level old_level = intr_get_level();
   struct thread *t = thread_current();
 
   int max_priority = t->original_priority;
@@ -425,6 +434,7 @@ thread_get_priority (void)
       return list_entry(list_begin(&t->donor_list), struct thread, donation_elem)->priority;
     }
   }
+  intr_set_level(old_level);
   return t->original_priority;
 }
 
@@ -540,6 +550,8 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
 
+
+  /**Updated to initialize priority, original_priority, and the donor_list */
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);

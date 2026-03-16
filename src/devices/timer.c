@@ -84,8 +84,7 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
-/** (NEEDS TO BE UPDATED)Sleeps for approximately TICKS timer ticks.  Interrupts must
-   be turned on. */
+/** Calculates wake_up_time for the thread, passes to thread_clock_out()*/
 void
 timer_sleep (int64_t ticks) 
 {
