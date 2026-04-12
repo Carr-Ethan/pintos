@@ -125,7 +125,7 @@ sema_up (struct semaphore *sema)
   
   intr_set_level (old_level);
 
-  thread_yield();
+  thread_yield_if_lower_priority();
 }
 
 static void sema_test_helper (void *sema_);

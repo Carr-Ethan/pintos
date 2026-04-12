@@ -93,6 +93,7 @@ struct thread
     struct list donor_list;
     struct lock *waiting_lock;
     int64_t wake_up_tick;
+    int8_t exit_status;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
     struct list_elem donation_elem;
@@ -146,6 +147,7 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+void thread_yield_if_lower_priority (void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
