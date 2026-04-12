@@ -12,7 +12,7 @@
 static void syscall_handler (struct intr_frame *);
 static void syscall_exit (int status);
 static void validate_ptr (const void *vaddr);
-static void validate_buffer (const void *buff, unsigned size);
+static void validate_buff (const void *buff, unsigned size);
 static int syscall_write(int fd, const void *buff, unsigned size);
 
 static void validate_ptr(const void *vaddr){
@@ -34,7 +34,7 @@ static void validate_buff(const void *buff, unsigned size){
 
 static void syscall_exit(int status){
   struct thread *cur = thread_current();
-  cur->exit_status = status;
+  cur->child_info->exit_status = status;
   thread_exit();
 }
 
@@ -48,8 +48,8 @@ static int syscall_write(int fd, const void *buff, unsigned size){
 }
 
 static void syscall_handler(struct intr_frame *f){
-  validate_ptr(f->esp);
   uint32_t *esp = (uint32_t *)f->esp;
+  validate_buff(esp, sizeof(uint32_t));
 
   int syscall_no = (int)esp[0];
 
@@ -59,6 +59,7 @@ static void syscall_handler(struct intr_frame *f){
       break;
 
     case SYS_EXIT:
+      validate_buff(esp, sizeof(uint32_t) * 2);
       validate_ptr(&esp[1]);
       syscall_exit((int)esp[1]);
       break;
@@ -67,6 +68,7 @@ static void syscall_handler(struct intr_frame *f){
         validate_ptr(&esp[1]);
         validate_ptr(&esp[2]);
         validate_ptr(&esp[3]);
+        validate_buff(esp, sizeof(uint32_t)*4);
 
         int fd = (int) esp[1];
         const void *buffer = (const void *) esp[2];
@@ -86,10 +88,3 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
-
-// static void
-// syscall_handler (struct intr_frame *f UNUSED) 
-// {
-//   printf ("system call!\n");
-//   thread_exit ();
-// }

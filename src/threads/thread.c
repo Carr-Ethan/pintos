@@ -225,6 +225,7 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  t->parent = thread_current();
   /* Add to run queue. */
   thread_unblock (t);
   /*Prempt so that it can be scheduled if the priority is higher*/
@@ -568,8 +569,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->original_priority = priority;
-  t->exit_status = 0;
   list_init(&t->donor_list);
+  list_init(&t->children);
+  t->child_info = NULL;
+  t->parent = NULL;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

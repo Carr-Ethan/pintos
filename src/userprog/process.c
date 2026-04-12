@@ -47,6 +47,19 @@ process_execute (const char *file_name)
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  struct thread *cur = thread_current();
+  struct child *c = malloc(sizeof(struct child));
+  if (c == NULL)
+    return TID_ERROR;
+
+  c->tid = tid;
+  c->exit_status = -1;
+  c->exited = false;
+  c->waited = false;
+  sema_init(&c->wait_sema, 0);
+
+  list_push_back(&cur->children, &c->elem);  
   return tid;
 }
 
@@ -58,6 +71,22 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  struct thread *cur = thread_current();
+
+  struct thread *parent = cur->parent;
+  if (parent != NULL) {
+    struct list_elem *e;
+    for (e = list_begin(&parent->children);
+         e != list_end(&parent->children);
+         e = list_next(e)) {
+
+      struct child *c = list_entry(e, struct child, elem);
+      if (c->tid == cur->tid) {
+        cur->child_info = c;
+        break;
+      }
+    }
+  }
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -93,7 +122,34 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  for (volatile int i = 0; i < 100000000; i++); 
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+
+  for (e = list_begin(&cur->children);
+       e != list_end(&cur->children);
+       e = list_next(e)) {
+
+    struct child *c = list_entry(e, struct child, elem);
+
+    if (c->tid == child_tid) {
+
+      if (c->waited)
+        return -1;
+
+      c->waited = true;
+
+      if (!c->exited)
+        sema_down(&c->wait_sema);
+
+      int status = c->exit_status;
+
+      list_remove(&c->elem);
+      free(c);
+
+      return status;
+    }
+  }
+
   return -1;
 }
 
@@ -105,7 +161,12 @@ process_exit (void)
   uint32_t *pd;
 
   if(cur->pagedir != NULL){
-    printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+    printf("%s: exit(%d)\n", cur->name, cur->child_info->exit_status);
+  }
+
+  if (cur->child_info != NULL) {
+    cur->child_info->exited = true;
+    sema_up(&cur->child_info->wait_sema);
   }
   
 

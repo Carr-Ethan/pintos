@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /** States in a thread's life cycle. */
 enum thread_status
@@ -23,6 +24,15 @@ typedef int tid_t;
 #define PRI_MIN 0                       /**< Lowest priority. */
 #define PRI_DEFAULT 31                  /**< Default priority. */
 #define PRI_MAX 63                      /**< Highest priority. */
+
+struct child {
+  tid_t tid;
+  int exit_status;
+  bool exited;
+  bool waited;
+  struct semaphore wait_sema;
+  struct list_elem elem;
+};
 
 /** A kernel thread or user process.
 
@@ -93,7 +103,10 @@ struct thread
     struct list donor_list;
     struct lock *waiting_lock;
     int64_t wake_up_tick;
-    int8_t exit_status;
+
+    struct list children; 
+    struct child *child_info;  
+    struct thread *parent; 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
     struct list_elem donation_elem;
